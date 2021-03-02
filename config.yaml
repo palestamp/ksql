@@ -1,0 +1,31 @@
+mappings:
+  k8s_deployment_synonyms:
+  - original: "ABC"
+    synonym: "123"
+  - original: "EFG"
+    synonym:  "456"
+
+
+queries:
+  # example use o run cmd/client/main.go --socket=/.osquery/shell.em --query=env_vars --define="left=<context1>.<namespace1>;right=<context2>.<namespace2>;deployments=<deployment1>,<deployment2>"
+  env_vars:
+    # osquery does not communicate columns order back to client, so we need to map those manually
+    columns: ["deployment", "image", "env_key", "l_env", "r_env"]
+    query: |
+      select
+          l.deployment,
+          l.image,
+          l.env_key,
+          l.env_value as l_env,
+          r.env_value as r_env
+      from k8s_env_vars as l
+      left join k8s_env_vars as r
+      on 
+          l.deployment = r.deployment and
+          l.image = r.image and
+          l.env_key = r.env_key
+      where
+          l.context = '{{ (split "." .left)._0 }}' and l.namespace = '{{ (split "." .left)._1 }}' and
+          r.context = '{{ (split "." .right)._0 }}' and r.namespace = '{{ (split "." .right)._1 }}' and
+          l.deployment {{- if .deployment }} = '{{ .deployment }}' {{- else if .deployments }} in ( '' {{- range .deployments }} , '{{ . }}' {{- end }}) {{- end }}
+      order by l.deployment, l.env_key;

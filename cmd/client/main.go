@@ -101,7 +101,7 @@ func main() {
 	}
 
 	args := populateArgs(q.Args, parseDefines(*defines))
-	fmt.Println(args)
+
 	var buf bytes.Buffer
 	err = tmpl.Execute(&buf, args)
 	if err != nil {
@@ -118,7 +118,6 @@ func main() {
 	}
 	defer client.Close()
 
-	fmt.Println(buf.String())
 	resp, err := client.Query(buf.String())
 	if err != nil {
 		log.Fatalf("Error communicating with osqueryd: %v", err)
