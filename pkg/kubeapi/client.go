@@ -5,6 +5,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -18,6 +19,7 @@ type KubeConfig struct{}
 func (c *KubeConfig) ListContexts() ([]string, error) {
 	kc := kubeconfig.New(kubeconfig.DefaultLoader)
 	defer kc.Close()
+
 	if err := kc.Parse(); err != nil {
 		return nil, err
 	}
@@ -131,21 +133,15 @@ func (c *KubeConfig) ListStatefulSets(context, namespace string) ([]appsv1.State
 	return resp.Items, nil
 }
 
-type sk struct {
-	context   string
-	namespace string
-	secret    string
-}
+var secretsCache = make(map[k][]corev1.Secret)
 
-var secretsCache = make(map[sk]map[string][]byte)
-
-func (c *KubeConfig) GetSecret(k8sContext, namespace, name string) (map[string][]byte, error) {
+func (c *KubeConfig) ListSecrets(k8sContext, namespace string) ([]corev1.Secret, error) {
 	logger := log.
-		WithField("resource", "secret").
+		WithField("resource", "secrets").
 		WithField("context", k8sContext).
 		WithField("namespace", namespace)
 
-	key := sk{k8sContext, namespace, name}
+	key := k{k8sContext, namespace}
 	if ds, ok := secretsCache[key]; ok {
 		logger.Info("Cache hit")
 		return ds, nil
@@ -157,14 +153,14 @@ func (c *KubeConfig) GetSecret(k8sContext, namespace, name string) (map[string][
 	}
 
 	logger.Info("Requesting API")
-	secret, err := cs.CoreV1().Secrets(namespace).Get(name, metav1.GetOptions{})
+	secrets, err := cs.CoreV1().Secrets(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	secretsCache[key] = secret.Data
+	secretsCache[key] = secrets.Items
 
-	return secret.Data, nil
+	return secrets.Items, nil
 }
 
 var clientsetCache = make(map[string]*kubernetes.Clientset)

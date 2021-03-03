@@ -30,6 +30,7 @@ func (d *EnvVars) Columns() []table.ColumnDefinition {
 		table.TextColumn("env_value"),
 		table.TextColumn("env_is_secret"),
 		table.TextColumn("secret_name"),
+		table.TextColumn("secret_key"),
 	}
 }
 
@@ -44,7 +45,7 @@ func (d *EnvVars) Generate(ctx context.Context, queryContext table.QueryContext)
 		image, tag := splitTag(c.Container.Image)
 
 		for _, e := range c.Container.Env {
-			env := getEnvVar(d.kc, c.Context, c.Namespace, true, e)
+			env := getEnvVar(e)
 
 			rows = append(rows, map[string]string{
 				"context":       c.Context,
@@ -56,6 +57,7 @@ func (d *EnvVars) Generate(ctx context.Context, queryContext table.QueryContext)
 				"env_value":     strings.TrimSpace(env.Value),
 				"env_is_secret": fmt.Sprintf("%t", env.IsSecret),
 				"secret_name":   env.SecretName,
+				"secret_key":    env.SecretKey,
 			})
 		}
 	}
@@ -139,7 +141,7 @@ func listContainers(kc *kubeapi.KubeConfig, qc table.QueryContext) ([]ContainerW
 	return out, nil
 }
 
-func getEnvVar(kc *kubeapi.KubeConfig, context, namespace string, expandSecrets bool, env corev1.EnvVar) EnvVar {
+func getEnvVar(env corev1.EnvVar) EnvVar {
 	e := EnvVar{Name: env.Name}
 
 	if env.Value != "" {
@@ -147,18 +149,10 @@ func getEnvVar(kc *kubeapi.KubeConfig, context, namespace string, expandSecrets 
 		return e
 	}
 
-	if expandSecrets && env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil {
-		e.SecretName = fmt.Sprintf("%s:%s", env.ValueFrom.SecretKeyRef.Name, env.ValueFrom.SecretKeyRef.Key)
-		log.WithField("secret", e.SecretName).Info("secret named")
+	if env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil {
 		e.IsSecret = true
-
-		data, err := kc.GetSecret(context, namespace, env.ValueFrom.SecretKeyRef.Name)
-		if err != nil {
-			e.RetrievalError = err
-			log.WithError(err).Info("error while retrieving secret")
-		} else {
-			e.Value = string(data[env.ValueFrom.SecretKeyRef.Key])
-		}
+		e.SecretName = env.ValueFrom.SecretKeyRef.Name
+		e.SecretKey = env.ValueFrom.SecretKeyRef.Key
 	}
 
 	return e
@@ -177,9 +171,9 @@ type ContainerWrap struct {
 }
 
 type EnvVar struct {
-	Name           string
-	Value          string
-	IsSecret       bool
-	SecretName     string
-	RetrievalError error
+	Name       string
+	Value      string
+	IsSecret   bool
+	SecretName string
+	SecretKey  string
 }

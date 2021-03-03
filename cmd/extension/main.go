@@ -83,7 +83,7 @@ func main() {
 		NewPlugin("k8s_namespaces", tables.NewNamespaces(kc)),
 		NewPlugin("k8s_containers", tables.NewContainers(kc)),
 		NewPlugin("k8s_env_vars", tables.NewEnvVars(kc)),
-		// NewPlugin("k8s_deployment_synonyms", tables.NewDeploymentSynonyms()),
+		NewPlugin("k8s_secrets", tables.NewSecrets(kc)),
 	)
 
 	log.Info("Starting server")
