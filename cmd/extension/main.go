@@ -4,9 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"time"
 
+	"github.com/kelseyhightower/envconfig"
 	"github.com/kolide/osquery-go"
 	"github.com/kolide/osquery-go/plugin/table"
 	"github.com/sirupsen/logrus"
@@ -24,22 +24,30 @@ var (
 	interval = flag.Int("interval", 3, "Seconds delay between connectivity checks")
 )
 
-func setupLogger() {
-	logrus.SetLevel(logrus.ErrorLevel)
+type EnvVars struct {
+	LogLevel string `envconfig:"KSQL_LOG_LEVEL"`
+	Config   string `envconfig:"KSQL_CONFIG" default:"config.yaml"`
+}
 
-	if envLvl, ok := os.LookupEnv("KSQL_LOG_LEVEL"); ok {
-		lvl, err := logrus.ParseLevel(envLvl)
-		if err != nil {
-			return
-		}
-
-		logrus.SetLevel(lvl)
+func setupLogger(envLvl string) {
+	lvl, err := logrus.ParseLevel(envLvl)
+	if err != nil {
+		logrus.SetLevel(logrus.ErrorLevel)
+		return
 	}
+
+	logrus.SetLevel(lvl)
 }
 
 func main() {
 	flag.Parse()
-	setupLogger()
+
+	var ev EnvVars
+	if err := envconfig.Process("", &ev); err != nil {
+		logrus.Fatal(err)
+	}
+
+	setupLogger(ev.LogLevel)
 
 	if *socket == "" {
 		log.Fatalln("Missing required --socket argument")
@@ -63,7 +71,7 @@ func main() {
 		log.Fatalf("Error creating extension: %s\n", err)
 	}
 
-	c, err := Load("config.yaml")
+	c, err := Load(ev.Config)
 	if err != nil {
 		log.Fatalf("Error loading config: %s\n", err)
 	}
@@ -77,7 +85,7 @@ func main() {
 		server.RegisterPlugin(NewPlugin(name, dm))
 	}
 
-	kc := &kubeapi.KubeConfig{}
+	kc := kubeapi.NewKubeConfig(c.IgnoreContexts)
 	server.RegisterPlugin(
 		NewPlugin("k8s_contexts", tables.NewContexts(kc)),
 		NewPlugin("k8s_namespaces", tables.NewNamespaces(kc)),
@@ -97,7 +105,8 @@ func NewPlugin(name string, tbl tables.Table) *table.Plugin {
 }
 
 type Config struct {
-	Mappings map[string][]map[string]interface{} `json:"mappings"`
+	Mappings       map[string][]map[string]interface{} `yaml:"mappings"`
+	IgnoreContexts []string                            `yaml:"ignore-contexts"`
 }
 
 func Load(configFilepath string) (Config, error) {

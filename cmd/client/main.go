@@ -40,6 +40,7 @@ func Load(configFilepath string) (Config, error) {
 
 var (
 	socket  = flag.String("socket", "", "osquery socket")
+	config  = flag.String("config", "config.yaml", "path to config")
 	query   = flag.String("query", "", "query to execute")
 	defines = flag.String("define", "", "definitions in format: arg1=value;list_arg1=val1,val2")
 )
@@ -85,7 +86,7 @@ func populateArgs(into, from map[string]interface{}) map[string]interface{} {
 func main() {
 	flag.Parse()
 
-	c, err := Load("config.yaml")
+	c, err := Load(*config)
 	if err != nil {
 		panic(err)
 	}

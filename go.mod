@@ -12,6 +12,7 @@ require (
 	github.com/googleapis/gnostic v0.1.0 // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.9 // indirect
+	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kolide/osquery-go v0.0.0-20200604192029-b019be7063ac
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.10 // indirect

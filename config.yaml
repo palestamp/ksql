@@ -1,15 +1,22 @@
+# mappings section allows to define static tables during plugin startup.
 mappings:
+  # k8s_deployment_synonyms will define table with two columns (original, synonyms) 
   k8s_deployment_synonyms:
   - original: "ABC"
     synonym: "123"
   - original: "EFG"
     synonym:  "456"
 
+# ignore-contexts allows to ignore contexts found in kube/config 
+ignore-contexts:
+- context1
+- context2
 
+# queries allows to define custom queries
 queries:
   # example use o run cmd/client/main.go --socket=/.osquery/shell.em --query=env_vars --define="left=<context1>.<namespace1>;right=<context2>.<namespace2>;deployments=<deployment1>,<deployment2>"
-  env_vars:
-    # osquery does not communicate columns order back to client, so we need to map those manually
+  env-vars:
+    # osquery does not communicate columns order back to client, so we need to map those manually, only columns from this list will be showed in final output
     columns: ["deployment", "image", "env_key", "l_env", "r_env"]
     query: |
       select
@@ -29,3 +36,41 @@ queries:
           r.context = '{{ (split "." .right)._0 }}' and r.namespace = '{{ (split "." .right)._1 }}' and
           l.deployment {{- if .deployment }} = '{{ .deployment }}' {{- else if .deployments }} in ( '' {{- range .deployments }} , '{{ . }}' {{- end }}) {{- end }}
       order by l.deployment, l.env_key;
+
+  container-versions:
+    columns: ["deployment", "image", "alias3", "alias4", "alias5"]
+    # args allow sto define static variables to be used in query
+    args:
+      envs:
+      - { alias: alias3, context: context3, namespace: default }
+      - { alias: alias4, context: context4, namespace: default }
+      - { alias: alias5, context: context5, namespace: default }
+    query: |
+      select
+          agg.deployment as deployment,
+          agg.image as image
+          {{- range .envs }}
+            , replace(group_concat(distinct agg.{{ .alias }}), ',', ' | ') as {{ .alias }}
+          {{- end }}
+      from (
+          select
+              coalesce(syn.synonym, d.deployment) as deployment,
+              d.image
+              {{- range .envs }}
+                , {{ .alias }}.tag as {{ .alias }}
+              {{- end }}
+          from (
+              (select distinct org.deployment, org.image as image from k8s_containers as org
+                  where
+                  org.namespace = 'default' and
+                  org.deployment not like '%etcd%'
+              ) as d
+              {{- range .envs }}
+                left join (select * from k8s_containers where context = '{{ .context }}' and namespace = '{{ .namespace }}') as {{ .alias }} on {{ .alias }}.image = d.image and {{ .alias }}.deployment = d.deployment
+              {{- end }}
+          ) left join
+          k8s_deployment_synonyms as syn
+          on d.deployment = syn.original
+      ) as agg
+      group by agg.deployment, agg.image
+      order by agg.deployment, agg.image;

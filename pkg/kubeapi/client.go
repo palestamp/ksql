@@ -14,7 +14,18 @@ import (
 	"github.com/palestamp/ksql/pkg/kubeconfig"
 )
 
-type KubeConfig struct{}
+func NewKubeConfig(ignoredContexts []string) *KubeConfig {
+	ignore := make(map[string]struct{})
+	for _, k := range ignoredContexts {
+		ignore[k] = struct{}{}
+	}
+
+	return &KubeConfig{ignoredContexts: ignore}
+}
+
+type KubeConfig struct {
+	ignoredContexts map[string]struct{}
+}
 
 func (c *KubeConfig) ListContexts() ([]string, error) {
 	kc := kubeconfig.New(kubeconfig.DefaultLoader)
@@ -28,8 +39,12 @@ func (c *KubeConfig) ListContexts() ([]string, error) {
 	sort.Strings(ctxs)
 
 	nc := make([]string, 0)
-	for _, c := range ctxs {
-		nc = append(nc, c)
+	for _, ctx := range ctxs {
+		if _, ok := c.ignoredContexts[ctx]; ok {
+			continue
+		}
+
+		nc = append(nc, ctx)
 	}
 
 	return nc, nil
